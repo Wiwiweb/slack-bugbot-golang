@@ -10,7 +10,7 @@ import (
 )
 
 const botName = "bugbot"
-var emptyParameters = slack.PostMessageParameters{}
+var defaultParameters = slack.PostMessageParameters{}
 var slackApi = slack.New("xoxb-4401757444-fDt9Tg9nroPbrlh5NxlDy4Kd")
 
 func main() {
@@ -18,7 +18,10 @@ func main() {
     //    webSocketApi, err := slackApi.StartRTM("", "http://example.com")
 
     slackApi.SetDebug(true)
-    emptyParameters.AsUser = true
+    defaultParameters.AsUser = true
+    // AsUser doesn't work yet on this Go API so let's implement a workaround
+    defaultParameters.Username = "bugbot"
+    defaultParameters.IconEmoji = ":catbug_static:"
 
     port := 8123
     log.Printf("Starting HTTP server on %d", port)
@@ -40,11 +43,10 @@ func Summon(w http.ResponseWriter, r *http.Request) {
         channelId := getChannelIdFromName(incomingChannel)
         if (isInChannel(channelId)) {
             log.Printf("Already in channel")
-            slackApi.PostMessage(channelId, "Hi!", emptyParameters)
+            slackApi.PostMessage(channelId, "Hi!", defaultParameters)
         } else {
             log.Printf("Not in channel")
-            log.Printf("%b", emptyParameters.AsUser)
-            slackApi.PostMessage(channelId, fmt.Sprintf("Summon me with @%s!", botName), emptyParameters)
+            slackApi.PostMessage(channelId, fmt.Sprintf("Summon me with @%s!", botName), defaultParameters)
         }
     }
 }
