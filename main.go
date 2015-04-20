@@ -5,8 +5,8 @@ import (
     "net/http"
     "log"
     "time"
-    "strconv"
     "fmt"
+    "strconv"
 )
 
 const botName = "bugbot"
@@ -30,7 +30,28 @@ func main() {
     mux.HandleFunc("/", Summon)
     mux.HandleFunc("/time", Time)
 
-    http.ListenAndServe(":"+strconv.Itoa(port), mux)
+    go http.ListenAndServe(":"+strconv.Itoa(port), mux)
+
+    chReceiver := make(chan slack.SlackEvent, 100)
+    // Seems like the protocol is optional, and the origin can be any URL
+    rtmAPI, err := slackApi.StartRTM("", "http://example.com")
+    if err != nil {
+        log.Printf("Error starting RTM: %s", err)
+    }
+    go rtmAPI.HandleIncomingEvents(chReceiver)
+    go rtmAPI.Keepalive(20 * time.Second)
+    log.Printf("RTM is started")
+
+    for {
+        event := <-chReceiver
+        // Seems weird to use a switch with just one case
+        // but apparently that's the only way to check an interface{} for type
+        switch event.Data.(type) {
+            case *slack.MessageEvent:
+            message := event.Data.(*slack.MessageEvent)
+            log.Printf("Message from %s in channel %s: %s\n", message.UserId, message.ChannelId, message.Text)
+        }
+    }
 }
 
 func Summon(w http.ResponseWriter, r *http.Request) {
