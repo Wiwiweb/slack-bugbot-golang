@@ -7,6 +7,7 @@ import (
     "time"
     "fmt"
     "strconv"
+    "regexp"
 )
 
 const botName = "bugbot"
@@ -42,6 +43,8 @@ func main() {
     go rtmAPI.Keepalive(20 * time.Second)
     log.Printf("RTM is started")
 
+    bugNbRegex := regexp.MustCompile(`3\d{5}`)
+
     for {
         event := <-chReceiver
         // Seems weird to use a switch with just one case
@@ -50,6 +53,10 @@ func main() {
             case *slack.MessageEvent:
             message := event.Data.(*slack.MessageEvent)
             log.Printf("Message from %s in channel %s: %s\n", message.UserId, message.ChannelId, message.Text)
+            matches := bugNbRegex.FindAllString(message.Text, -1)
+            if (matches != nil) {
+                log.Printf("That message mentions these bugs: %s", matches)
+            }
         }
     }
 }
