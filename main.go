@@ -11,6 +11,9 @@ import (
 )
 
 const botName = "bugbot"
+const openProjectBugUrl = "https://openproject.activestate.com/work_packages/%s"
+const openProjectBugNumberRegex = `3\d{5}`
+
 var defaultParameters = slack.PostMessageParameters{}
 var slackApi = slack.New("xoxb-4401757444-fDt9Tg9nroPbrlh5NxlDy4Kd")
 
@@ -43,7 +46,7 @@ func main() {
     go rtmAPI.Keepalive(20 * time.Second)
     log.Printf("RTM is started")
 
-    bugNbRegex := regexp.MustCompile(`3\d{5}`)
+    bugNbRegex := regexp.MustCompile(openProjectBugNumberRegex)
 
     for {
         event := <-chReceiver
@@ -52,10 +55,19 @@ func main() {
         switch event.Data.(type) {
             case *slack.MessageEvent:
             message := event.Data.(*slack.MessageEvent)
+            // That event doesn't contain the Username, so we can't use message.Username
             log.Printf("Message from %s in channel %s: %s\n", message.UserId, message.ChannelId, message.Text)
-            matches := bugNbRegex.FindAllString(message.Text, -1)
-            if (matches != nil) {
-                log.Printf("That message mentions these bugs: %s", matches)
+            if (message.SubType != "bot_message") {
+                matches := bugNbRegex.FindAllString(message.Text, -1)
+                if (matches != nil) {
+                    log.Printf("That message mentions these bugs: %s", matches)
+                    var messageText string
+                    for _, match := range matches {
+                        messageText += fmt.Sprintf(openProjectBugUrl, match)
+                        messageText += "\n"
+                    }
+                    slackApi.PostMessage(message.ChannelId, messageText, defaultParameters)
+                }
             }
         }
     }
