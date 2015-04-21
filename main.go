@@ -8,6 +8,7 @@ import (
     "fmt"
     "strconv"
     "regexp"
+    "strings"
 )
 
 const botName = "bugbot"
@@ -15,14 +16,16 @@ const openProjectBugUrl = "https://openproject.activestate.com/work_packages/%s"
 const bugzillaBugUrl = "https://bugs.activestate.com/show_bug.cgi?id=%s"
 const bugNumberRegex = ` #?([13]\d{5})`
 
-var defaultParameters = slack.PostMessageParameters{}
+var messageParameters = slack.NewPostMessageParameters()
+var historyParameters = slack.NewHistoryParameters()
 var slackApi = slack.New("xoxb-4401757444-fDt9Tg9nroPbrlh5NxlDy4Kd")
 
 func main() {
-    defaultParameters.AsUser = true
+    messageParameters.AsUser = true
     // AsUser doesn't work yet on this Go API so let's implement a workaround
-    defaultParameters.Username = "bugbot"
-    defaultParameters.IconEmoji = ":catbug_static:"
+    messageParameters.Username = "bugbot"
+    messageParameters.IconEmoji = ":catbug_static:"
+    historyParameters.Count = 10
 
     port := 8123
     log.Printf("Starting HTTP server on %d", port)
@@ -62,14 +65,20 @@ func main() {
                 log.Printf("That message mentions these bugs: %s", matches)
                 var messageText string
                 for _, match := range matchesNb {
-                    if (string(match[0]) == "3") {
-                        messageText += fmt.Sprintf(openProjectBugUrl, match)
+                    if bugNumberWasLinkedRecently(match, message.ChannelId, message.Timestamp) {
+                        log.Printf("Bug %s was already linked drecently", match)
                     } else {
-                        messageText += fmt.Sprintf(bugzillaBugUrl, match)
+                        if (string(match[0]) == "3") {
+                            messageText += fmt.Sprintf(openProjectBugUrl, match)
+                        } else {
+                            messageText += fmt.Sprintf(bugzillaBugUrl, match)
+                        }
+                        messageText += "\n"
                     }
-                    messageText += "\n"
                 }
-                slackApi.PostMessage(message.ChannelId, messageText, defaultParameters)
+                if messageText != "" {
+                    slackApi.PostMessage(message.ChannelId, messageText, messageParameters)
+                }
             }
         }
     }
@@ -85,10 +94,10 @@ func Summon(w http.ResponseWriter, r *http.Request) {
         channelId := getChannelIdFromName(incomingChannel)
         if (isInChannel(channelId)) {
             log.Printf("Already in channel")
-            slackApi.PostMessage(channelId, "Hi!", defaultParameters)
+            slackApi.PostMessage(channelId, "Hi!", messageParameters)
         } else {
             log.Printf("Not in channel")
-            slackApi.PostMessage(channelId, fmt.Sprintf("Summon me with @%s!", botName), defaultParameters)
+            slackApi.PostMessage(channelId, fmt.Sprintf("Summon me with @%s!", botName), messageParameters)
         }
     }
 }
@@ -108,4 +117,15 @@ func isInChannel(channelId string) bool {
     log.Printf("isInChannel: %s", channelId)
     info, _ := slackApi.GetChannelInfo(channelId)
     return info.IsMember
+}
+
+func bugNumberWasLinkedRecently(number string, channelId string, messageTime string) bool {
+    historyParameters.Latest = messageTime
+    info, _ := slackApi.GetChannelHistory(channelId, historyParameters)
+    for _, message := range info.Messages {
+        if strings.Contains(message.Text, number) {
+            return true
+        }
+    }
+    return false
 }
