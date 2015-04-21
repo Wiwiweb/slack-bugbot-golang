@@ -56,19 +56,19 @@ func main() {
             // That event doesn't contain the Username, so we can't use message.Username
             log.Printf("Message from %s in channel %s: %s\n", message.UserId, message.ChannelId, message.Text)
             matches := bugNbRegex.FindAllStringSubmatch(message.Text, -1)
-            if (matches != nil) {
+            if matches != nil {
                 // We only care about the first capturing group
                 matchesNb := make([]string, len(matches))
                 for i, _ := range matches {
                     matchesNb[i] = matches[i][1]
                 }
-                log.Printf("That message mentions these bugs: %s", matches)
+                log.Printf("That message mentions these bugs: %s", matchesNb)
                 var messageText string
                 for _, match := range matchesNb {
                     if bugNumberWasLinkedRecently(match, message.ChannelId, message.Timestamp) {
                         log.Printf("Bug %s was already linked drecently", match)
                     } else {
-                        if (string(match[0]) == "3") {
+                        if string(match[0]) == "3" {
                             messageText += fmt.Sprintf(openProjectBugUrl, match)
                         } else {
                             messageText += fmt.Sprintf(bugzillaBugUrl, match)
@@ -86,13 +86,13 @@ func main() {
 
 func Summon(w http.ResponseWriter, r *http.Request) {
     token := r.PostFormValue("token")
-    if (token != "QMiGNjUdxAWwowx6RxPBDm4s") {
+    if token != "QMiGNjUdxAWwowx6RxPBDm4s" {
         log.Printf("Request from something other than the webhook")
     } else {
         incomingChannel := r.PostFormValue("channel_name")
         log.Printf("Summon request into channel: %s", incomingChannel)
         channelId := getChannelIdFromName(incomingChannel)
-        if (isInChannel(channelId)) {
+        if isInChannel(channelId) {
             log.Printf("Already in channel")
             slackApi.PostMessage(channelId, "Hi!", messageParameters)
         } else {
