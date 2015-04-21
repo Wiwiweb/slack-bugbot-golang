@@ -13,7 +13,7 @@ import (
 const botName = "bugbot"
 const openProjectBugUrl = "https://openproject.activestate.com/work_packages/%s"
 const bugzillaBugUrl = "https://bugs.activestate.com/show_bug.cgi?id=%s"
-const bugNumberRegex = `[13]\d{5}`
+const bugNumberRegex = ` #?([13]\d{5})`
 
 var defaultParameters = slack.PostMessageParameters{}
 var slackApi = slack.New("xoxb-4401757444-fDt9Tg9nroPbrlh5NxlDy4Kd")
@@ -58,21 +58,24 @@ func main() {
             message := event.Data.(*slack.MessageEvent)
             // That event doesn't contain the Username, so we can't use message.Username
             log.Printf("Message from %s in channel %s: %s\n", message.UserId, message.ChannelId, message.Text)
-            if (message.SubType != "bot_message") {
-                matches := bugNbRegex.FindAllString(message.Text, -1)
-                if (matches != nil) {
-                    log.Printf("That message mentions these bugs: %s", matches)
-                    var messageText string
-                    for _, match := range matches {
-                        if (string(match[0]) == "3") {
-                            messageText += fmt.Sprintf(openProjectBugUrl, match)
-                        } else {
-                            messageText += fmt.Sprintf(bugzillaBugUrl, match)
-                        }
-                        messageText += "\n"
-                    }
-                    slackApi.PostMessage(message.ChannelId, messageText, defaultParameters)
+            matches := bugNbRegex.FindAllStringSubmatch(message.Text, -1)
+            if (matches != nil) {
+                // We only care about the first capturing group
+                matchesNb := make([]string, len(matches))
+                for i, _ := range matches {
+                    matchesNb[i] = matches[i][1]
                 }
+                log.Printf("That message mentions these bugs: %s", matches)
+                var messageText string
+                for _, match := range matchesNb {
+                    if (string(match[0]) == "3") {
+                        messageText += fmt.Sprintf(openProjectBugUrl, match)
+                    } else {
+                        messageText += fmt.Sprintf(bugzillaBugUrl, match)
+                    }
+                    messageText += "\n"
+                }
+                slackApi.PostMessage(message.ChannelId, messageText, defaultParameters)
             }
         }
     }
