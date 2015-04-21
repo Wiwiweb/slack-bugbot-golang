@@ -12,7 +12,8 @@ import (
 
 const botName = "bugbot"
 const openProjectBugUrl = "https://openproject.activestate.com/work_packages/%s"
-const openProjectBugNumberRegex = `3\d{5}`
+const bugzillaBugUrl = "https://bugs.activestate.com/show_bug.cgi?id=%s"
+const bugNumberRegex = `[13]\d{5}`
 
 var defaultParameters = slack.PostMessageParameters{}
 var slackApi = slack.New("xoxb-4401757444-fDt9Tg9nroPbrlh5NxlDy4Kd")
@@ -34,7 +35,7 @@ func main() {
     mux.HandleFunc("/", Summon)
     mux.HandleFunc("/time", Time)
 
-    go http.ListenAndServe(":"+strconv.Itoa(port), mux)
+    go http.ListenAndServe(":" + strconv.Itoa(port), mux)
 
     chReceiver := make(chan slack.SlackEvent, 100)
     // Seems like the protocol is optional, and the origin can be any URL
@@ -46,7 +47,7 @@ func main() {
     go rtmAPI.Keepalive(20 * time.Second)
     log.Printf("RTM is started")
 
-    bugNbRegex := regexp.MustCompile(openProjectBugNumberRegex)
+    bugNbRegex := regexp.MustCompile(bugNumberRegex)
 
     for {
         event := <-chReceiver
@@ -63,7 +64,11 @@ func main() {
                     log.Printf("That message mentions these bugs: %s", matches)
                     var messageText string
                     for _, match := range matches {
-                        messageText += fmt.Sprintf(openProjectBugUrl, match)
+                        if (string(match[0]) == "3") {
+                            messageText += fmt.Sprintf(openProjectBugUrl, match)
+                        } else {
+                            messageText += fmt.Sprintf(bugzillaBugUrl, match)
+                        }
                         messageText += "\n"
                     }
                     slackApi.PostMessage(message.ChannelId, messageText, defaultParameters)
