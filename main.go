@@ -19,10 +19,6 @@ var defaultParameters = slack.PostMessageParameters{}
 var slackApi = slack.New("xoxb-4401757444-fDt9Tg9nroPbrlh5NxlDy4Kd")
 
 func main() {
-    //    chReceiver := make(chan slack.SlackEvent)
-    //    webSocketApi, err := slackApi.StartRTM("", "http://example.com")
-
-    slackApi.SetDebug(true)
     defaultParameters.AsUser = true
     // AsUser doesn't work yet on this Go API so let's implement a workaround
     defaultParameters.Username = "bugbot"
@@ -33,8 +29,6 @@ func main() {
 
     mux := http.NewServeMux()
     mux.HandleFunc("/", Summon)
-    mux.HandleFunc("/time", Time)
-
     go http.ListenAndServe(":" + strconv.Itoa(port), mux)
 
     chReceiver := make(chan slack.SlackEvent, 100)
@@ -97,13 +91,6 @@ func Summon(w http.ResponseWriter, r *http.Request) {
             slackApi.PostMessage(channelId, fmt.Sprintf("Summon me with @%s!", botName), defaultParameters)
         }
     }
-}
-
-const layout = "Jan 2, 2006 at 3:04pm (MST)"
-func Time(w http.ResponseWriter, r *http.Request) {
-    log.Printf("Time request")
-    tm := time.Now().Format(layout)
-    w.Write([]byte("The time is: " + tm))
 }
 
 func getChannelIdFromName(channelName string) string {
