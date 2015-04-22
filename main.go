@@ -2,6 +2,8 @@ package main
 
 import (
     "github.com/nlopes/slack"
+//    "database/sql"
+//    _ "github.com/go-sql-driver/mysql"
     "net/http"
     "log"
     "time"
@@ -14,7 +16,7 @@ import (
 const botName = "bugbot"
 const openProjectBugUrl = "https://openproject.activestate.com/work_packages/%s"
 const bugzillaBugUrl = "https://bugs.activestate.com/show_bug.cgi?id=%s"
-const bugNumberRegex = ` #?([13]\d{5})`
+const bugNumberRegex = `\b#?([13]\d{5})\b(?:[^-]|$)`
 
 var messageParameters = slack.NewPostMessageParameters()
 var historyParameters = slack.NewHistoryParameters()
@@ -94,7 +96,7 @@ func Summon(w http.ResponseWriter, r *http.Request) {
         channelId := getChannelIdFromName(incomingChannel)
         if isInChannel(channelId) {
             log.Printf("Already in channel")
-            slackApi.PostMessage(channelId, "Hi!", messageParameters)
+            slackApi.PostMessage(channelId, "Hi! <test|https://github.com>", messageParameters)
         } else {
             log.Printf("Not in channel")
             slackApi.PostMessage(channelId, fmt.Sprintf("Summon me with @%s!", botName), messageParameters)
