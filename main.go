@@ -16,7 +16,7 @@ import (
 const botName = "bugbot"
 const openProjectBugUrl = "https://openproject.activestate.com/work_packages/%s"
 const bugzillaBugUrl = "https://bugs.activestate.com/show_bug.cgi?id=%s"
-const bugNumberRegex = `\b#?([13]\d{5})\b(?:[^-]|$)`
+const bugNumberRegex = `(?:\s|^)#?([13]\d{5})\b(?:[^-]|$)`
 
 var messageParameters = slack.NewPostMessageParameters()
 var historyParameters = slack.NewHistoryParameters()
