@@ -2,8 +2,8 @@ package main
 
 import (
     "github.com/nlopes/slack"
-//    "database/sql"
-//    _ "github.com/go-sql-driver/mysql"
+    "database/sql"
+    _ "github.com/go-sql-driver/mysql"
     "net/http"
     "log"
     "time"
@@ -11,6 +11,9 @@ import (
     "strconv"
     "regexp"
     "strings"
+    "os"
+    "encoding/json"
+    "errors"
 )
 
 const botName = "bugbot"
@@ -18,11 +21,23 @@ const openProjectBugUrl = "https://openproject.activestate.com/work_packages/%s"
 const bugzillaBugUrl = "https://bugs.activestate.com/show_bug.cgi?id=%s"
 const bugNumberRegex = `(?:\s|^)#?([13]\d{5})\b(?:[^-]|$)`
 
+type MysqlConfig struct {
+    Host     string
+    Database string
+    Username string
+    Password string
+}
+
 var messageParameters = slack.NewPostMessageParameters()
 var historyParameters = slack.NewHistoryParameters()
 var slackApi = slack.New("xoxb-4401757444-fDt9Tg9nroPbrlh5NxlDy4Kd")
+var mysqlConfig = MysqlConfig{}
 
 func main() {
+    file, _ := os.Open("mysqlConfig.json")
+    decoder := json.NewDecoder(file)
+    decoder.Decode(&mysqlConfig)
+
     messageParameters.AsUser = true
     // AsUser doesn't work yet on this Go API so let's implement a workaround
     messageParameters.Username = "bugbot"
@@ -68,10 +83,18 @@ func main() {
                 var messageText string
                 for _, match := range matchesNb {
                     if bugNumberWasLinkedRecently(match, message.ChannelId, message.Timestamp) {
-                        log.Printf("Bug %s was already linked drecently", match)
+                        log.Printf("Bug %s was already linked recently", match)
                     } else {
                         if string(match[0]) == "3" {
-                            messageText += fmt.Sprintf(openProjectBugUrl, match)
+                            bugTitle, err := fetchOpenProjectBugTitle(match)
+                            if err != nil && err.Error() == "This bug doesn't exist!" {
+                                messageText += fmt.Sprintf("Bug %s doesn't exist!", match)
+                            } else if bugTitle == "" {
+                                messageText += fmt.Sprintf(openProjectBugUrl, match)
+                            } else {
+                                messageText += fmt.Sprintf("%s: %s - %s",
+                                match, bugTitle, fmt.Sprintf(openProjectBugUrl, match))
+                            }
                         } else {
                             messageText += fmt.Sprintf(bugzillaBugUrl, match)
                         }
@@ -96,7 +119,7 @@ func Summon(w http.ResponseWriter, r *http.Request) {
         channelId := getChannelIdFromName(incomingChannel)
         if isInChannel(channelId) {
             log.Printf("Already in channel")
-            slackApi.PostMessage(channelId, "Hi! <test|https://github.com>", messageParameters)
+            slackApi.PostMessage(channelId, "Hi!", messageParameters)
         } else {
             log.Printf("Not in channel")
             slackApi.PostMessage(channelId, fmt.Sprintf("Summon me with @%s!", botName), messageParameters)
@@ -130,4 +153,37 @@ func bugNumberWasLinkedRecently(number string, channelId string, messageTime str
         }
     }
     return false
+}
+
+func fetchOpenProjectBugTitle(bugNumber string) (string, error) {
+    connectionURL := fmt.Sprintf("%s:%s@tcp(%s:3306)/%s?allowOldPasswords=1",
+    mysqlConfig.Username, mysqlConfig.Password, mysqlConfig.Host, mysqlConfig.Database)
+    log.Printf(connectionURL)
+    db, err := sql.Open("mysql", connectionURL)
+    if err != nil {
+        log.Printf("Mysql database is unavailable! %s", err.Error())
+        return "", err
+    }
+    defer db.Close()
+
+    stmtIns, err := db.Prepare("SELECT subject FROM work_packages WHERE id=?")
+    if err != nil {
+        log.Printf("MySQL statement preparation failed! %s", err.Error())
+        return "", err
+    }
+    defer stmtIns.Close()
+
+    var bugTitle string
+    stmtIns.QueryRow(bugNumber).Scan(&bugTitle)
+    if err != nil {
+        log.Printf("MySQL statement failed! %s", err.Error())
+        return "", err
+    }
+
+    if bugTitle == "" {
+        return "", errors.New("This bug doesn't exist!")
+    }
+
+    log.Printf("#%s: %s", bugNumber, bugTitle)
+    return bugTitle, nil
 }
