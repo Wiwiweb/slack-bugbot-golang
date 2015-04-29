@@ -17,6 +17,7 @@ import (
 )
 
 const botName = "bugbot"
+const botKey = "xoxb-4401757444-fDt9Tg9nroPbrlh5NxlDy4Kd"
 const openProjectBugUrl = "https://openproject.activestate.com/work_packages/%s"
 const bugzillaBugUrl = "https://bugs.activestate.com/show_bug.cgi?id=%s"
 const bugNumberRegex = `(?:\s|^)#?([13]\d{5})\b(?:[^-]|$)`
@@ -30,7 +31,7 @@ type MysqlConfig struct {
 
 var messageParameters = slack.NewPostMessageParameters()
 var historyParameters = slack.NewHistoryParameters()
-var slackApi = slack.New("xoxb-4401757444-fDt9Tg9nroPbrlh5NxlDy4Kd")
+var slackApi = slack.New(botKey)
 var mysqlConfig = MysqlConfig{}
 
 func main() {
@@ -65,11 +66,8 @@ func main() {
 
     for {
         event := <-chReceiver
-        // Seems weird to use a switch with just one case
-        // but apparently that's the only way to check an interface{} for type
-        switch event.Data.(type) {
-            case *slack.MessageEvent:
-            message := event.Data.(*slack.MessageEvent)
+        message, ok := event.Data.(*slack.MessageEvent)
+        if ok {
             // That event doesn't contain the Username, so we can't use message.Username
             log.Printf("Message from %s in channel %s: %s\n", message.UserId, message.ChannelId, message.Text)
             matches := bugNbRegex.FindAllStringSubmatch(message.Text, -1)
