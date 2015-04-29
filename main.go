@@ -38,9 +38,6 @@ func main() {
     decoder.Decode(&mysqlConfig)
 
     messageParameters.AsUser = true
-    // AsUser doesn't work yet on this Go API so let's implement a workaround
-    messageParameters.Username = "bugbot"
-    messageParameters.IconEmoji = ":catbug_static:"
     historyParameters.Count = 10
 
     chReceiver := make(chan slack.SlackEvent, 100)
