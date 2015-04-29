@@ -12,6 +12,7 @@ import (
     "os"
     "encoding/json"
     "errors"
+    "os/exec"
 )
 
 const botName = "bugbot"
@@ -86,16 +87,7 @@ func bugMentions(bugNumbers []string, message *slack.MessageEvent) {
             log.Printf("Bug %s was already linked recently", match)
         } else {
             if string(match[0]) == "3" {
-                bugTitle, err := fetchOpenProjectBugTitle(match)
-                if err != nil && err.Error() == "This bug doesn't exist!" {
-                    messageText += fmt.Sprintf("Bug %s doesn't exist!", match)
-                } else if bugTitle == "" {
-                    messageText += fmt.Sprintf("<%s|%s (Couldn't fetch title)>",
-                    fmt.Sprintf(openProjectBugUrl, match), match)
-                } else {
-                    messageText += fmt.Sprintf("<%s|%s: %s>",
-                    fmt.Sprintf(openProjectBugUrl, match), match, bugTitle)
-                }
+                messageText += formatOpenProjectBugMessage(match)
             } else {
                 messageText += fmt.Sprintf(bugzillaBugUrl, match)
             }
@@ -106,6 +98,21 @@ func bugMentions(bugNumbers []string, message *slack.MessageEvent) {
     if messageText != "" {
         slackApi.PostMessage(message.ChannelId, messageText, messageParameters)
     }
+}
+
+func formatOpenProjectBugMessage(bugNumber string) string {
+    var messageText string
+    bugTitle, err := fetchOpenProjectBugTitle(bugNumber)
+    if err != nil && err.Error() == "This bug doesn't exist!" {
+        messageText += fmt.Sprintf("Bug %s doesn't exist!", bugNumber)
+    } else if bugTitle == "" {
+        messageText += fmt.Sprintf("<%s|%s (Couldn't fetch title)>",
+        fmt.Sprintf(openProjectBugUrl, bugNumber), bugNumber)
+    } else {
+        messageText += fmt.Sprintf("<%s|%s: %s>",
+        fmt.Sprintf(openProjectBugUrl, bugNumber), bugNumber, bugTitle)
+    }
+    return messageText
 }
 
 func bugNumberWasLinkedRecently(number string, channelId string, messageTime string) bool {
@@ -155,9 +162,37 @@ func fetchOpenProjectBugTitle(bugNumber string) (string, error) {
 
 func bugbotMention(message *slack.MessageEvent) {
     log.Printf("That message mentions bugbot")
-    matched, _ := regexp.MatchString(`[Tt]hanks`, message.Text)
+    // Unmerged bugs
+    matched, _ := regexp.MatchString(`^(?:[@/]?bugbot|<@U04BTN9D2>) unmerged`, message.Text)
+    if matched {
+        lines := getUnMergedBugNumbers()
+        messageText := "*Issues that are unmerged to master:*\n"
+        for _, bugNumber := range lines {
+            log.Printf("bugNumber: %s", bugNumber)
+            // Kind of a hack until I can make sure getUnMergedBugNumbers returns only bug numbers
+            if bugNumber != "" && string(bugNumber[0]) == "3" {
+                messageText += formatOpenProjectBugMessage(bugNumber)
+                messageText += "\n"
+            }
+        }
+        slackApi.PostMessage(message.ChannelId, messageText, messageParameters)
+    }
+
+    // Thanks
+    matched, _ = regexp.MatchString(`[Tt]hanks`, message.Text)
     if matched {
         messageText := "You're welcome! :catbug:"
         slackApi.PostMessage(message.ChannelId, messageText, messageParameters)
     }
+}
+
+func getUnMergedBugNumbers() []string {
+    log.Printf("Call for unmerged bug check")
+    out, err := exec.Command("sh", "unmerged-bugs.sh").Output()
+    if err != nil {
+        log.Fatal(err)
+    }
+    lines := strings.Split(string(out), "\n")
+    log.Printf("Unmerged bugs: %s", lines)
+    return lines
 }
