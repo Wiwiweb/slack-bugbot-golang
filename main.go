@@ -15,6 +15,7 @@ import (
 )
 
 const botName = "bugbot"
+const botSlackId = "U04BTN9D2"
 const botKey = "xoxb-4401757444-fDt9Tg9nroPbrlh5NxlDy4Kd"
 const openProjectBugUrl = "https://openproject.activestate.com/work_packages/%s"
 const bugzillaBugUrl = "https://bugs.activestate.com/show_bug.cgi?id=%s"
@@ -60,6 +61,7 @@ func main() {
         if ok { // If this is a MessageEvent
             // That event doesn't contain the Username, so we can't use message.Username
             log.Printf("Message from %s in channel %s: %s\n", message.UserId, message.ChannelId, message.Text)
+
             matches := bugNbRegex.FindAllStringSubmatch(message.Text, -1)
             if matches != nil {
                 // We only care about the first capturing group
@@ -67,36 +69,42 @@ func main() {
                 for i, _ := range matches {
                     matchesNb[i] = matches[i][1]
                 }
-                log.Printf("That message mentions these bugs: %s", matchesNb)
-                var messageText string
-
-                for _, match := range matchesNb {
-                    if bugNumberWasLinkedRecently(match, message.ChannelId, message.Timestamp) {
-                        log.Printf("Bug %s was already linked recently", match)
-                    } else {
-                        if string(match[0]) == "3" {
-                            bugTitle, err := fetchOpenProjectBugTitle(match)
-                            if err != nil && err.Error() == "This bug doesn't exist!" {
-                                messageText += fmt.Sprintf("Bug %s doesn't exist!", match)
-                            } else if bugTitle == "" {
-                                messageText += fmt.Sprintf("<%s|%s (Couldn't fetch title)>",
-                                fmt.Sprintf(openProjectBugUrl, match), match)
-                            } else {
-                                messageText += fmt.Sprintf("<%s|%s: %s>",
-                                fmt.Sprintf(openProjectBugUrl, match), match, bugTitle)
-                            }
-                        } else {
-                            messageText += fmt.Sprintf(bugzillaBugUrl, match)
-                        }
-                        messageText += "\n"
-                    }
-                }
-
-                if messageText != "" {
-                    slackApi.PostMessage(message.ChannelId, messageText, messageParameters)
-                }
+                bugMentions(matchesNb, message)
+            } else if strings.Contains(message.Text, botName) || strings.Contains(message.Text, botSlackId) {
+                bugbotMention(message)
             }
         }
+    }
+}
+
+func bugMentions(bugNumbers []string, message *slack.MessageEvent) {
+    log.Printf("That message mentions these bugs: %s", bugNumbers)
+    var messageText string
+
+    for _, match := range bugNumbers {
+        if bugNumberWasLinkedRecently(match, message.ChannelId, message.Timestamp) {
+            log.Printf("Bug %s was already linked recently", match)
+        } else {
+            if string(match[0]) == "3" {
+                bugTitle, err := fetchOpenProjectBugTitle(match)
+                if err != nil && err.Error() == "This bug doesn't exist!" {
+                    messageText += fmt.Sprintf("Bug %s doesn't exist!", match)
+                } else if bugTitle == "" {
+                    messageText += fmt.Sprintf("<%s|%s (Couldn't fetch title)>",
+                    fmt.Sprintf(openProjectBugUrl, match), match)
+                } else {
+                    messageText += fmt.Sprintf("<%s|%s: %s>",
+                    fmt.Sprintf(openProjectBugUrl, match), match, bugTitle)
+                }
+            } else {
+                messageText += fmt.Sprintf(bugzillaBugUrl, match)
+            }
+            messageText += "\n"
+        }
+    }
+
+    if messageText != "" {
+        slackApi.PostMessage(message.ChannelId, messageText, messageParameters)
     }
 }
 
@@ -143,4 +151,13 @@ func fetchOpenProjectBugTitle(bugNumber string) (string, error) {
 
     log.Printf("#%s: %s", bugNumber, bugTitle)
     return bugTitle, nil
+}
+
+func bugbotMention(message *slack.MessageEvent) {
+    log.Printf("That message mentions bugbot")
+    matched, _ := regexp.MatchString(`[Tt]hanks`, message.Text)
+    if matched {
+        messageText := "You're welcome! :catbug:"
+        slackApi.PostMessage(message.ChannelId, messageText, messageParameters)
+    }
 }
