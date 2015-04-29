@@ -166,10 +166,16 @@ func bugbotMention(message *slack.MessageEvent) {
     matched, _ := regexp.MatchString(`^(?:[@/]?bugbot|<@U04BTN9D2>) unmerged`, message.Text)
     if matched {
         _, timestamp, _ := slackApi.PostMessage(message.ChannelId, "Working on it... :catbug:", messageParameters)
-        lines := getUnMergedBugNumbers()
+        lines, err := getUnMergedBugNumbers()
+        if err != nil {
+            // Cannot use UpdateMessage reliably, doesn't work if we try to update the message before it appears
+            slackApi.DeleteMessage(message.ChannelId, timestamp)
+            messageText := fmt.Sprintf("Oh no! Something went wrong with the unmerged bugs script!\n`%s`", err)
+            slackApi.PostMessage(message.ChannelId, messageText, messageParameters)
+            return
+        }
         messageText := "*Issues that are unmerged to master:*\n"
         for _, bugNumber := range lines {
-            log.Printf("bugNumber: %s", bugNumber)
             // Kind of a hack until I can make sure getUnMergedBugNumbers returns only bug numbers
             if bugNumber != "" && string(bugNumber[0]) == "3" {
                 messageText += formatOpenProjectBugMessage(bugNumber)
@@ -189,13 +195,18 @@ func bugbotMention(message *slack.MessageEvent) {
     }
 }
 
-func getUnMergedBugNumbers() []string {
+func getUnMergedBugNumbers() ([]string, error) {
     log.Printf("Call for unmerged bug check")
     out, err := exec.Command("sh", "unmerged-bugs.sh").Output()
     if err != nil {
-        log.Fatal(err)
+        log.Printf("Unmerged bug script failed: %s - Output: %s", err, out)
+        if len(out) > 0 {
+            return nil, fmt.Errorf("%s - Output: %s", err, out)
+        } else {
+            return nil, err
+        }
     }
     lines := strings.Split(string(out), "\n")
     log.Printf("Unmerged bugs: %s", lines)
-    return lines
+    return lines, nil
 }
