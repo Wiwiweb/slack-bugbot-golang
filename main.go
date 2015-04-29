@@ -1,7 +1,7 @@
 package main
 
 import (
-    "github.com/nlopes/slack"
+    "github.com/Wiwiweb/slack"
     "database/sql"
     _ "github.com/go-sql-driver/mysql"
     "log"
@@ -165,6 +165,7 @@ func bugbotMention(message *slack.MessageEvent) {
     // Unmerged bugs
     matched, _ := regexp.MatchString(`^(?:[@/]?bugbot|<@U04BTN9D2>) unmerged`, message.Text)
     if matched {
+        _, timestamp, _ := slackApi.PostMessage(message.ChannelId, "Working on it... :catbug:", messageParameters)
         lines := getUnMergedBugNumbers()
         messageText := "*Issues that are unmerged to master:*\n"
         for _, bugNumber := range lines {
@@ -175,6 +176,8 @@ func bugbotMention(message *slack.MessageEvent) {
                 messageText += "\n"
             }
         }
+        // Cannot use UpdateMessage since that doesn't support formatted links
+        slackApi.DeleteMessage(message.ChannelId, timestamp)
         slackApi.PostMessage(message.ChannelId, messageText, messageParameters)
     }
 
