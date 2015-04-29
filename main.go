@@ -4,11 +4,9 @@ import (
     "github.com/nlopes/slack"
     "database/sql"
     _ "github.com/go-sql-driver/mysql"
-    "net/http"
     "log"
     "time"
     "fmt"
-    "strconv"
     "regexp"
     "strings"
     "os"
@@ -44,13 +42,6 @@ func main() {
     messageParameters.Username = "bugbot"
     messageParameters.IconEmoji = ":catbug_static:"
     historyParameters.Count = 10
-
-    port := 8123
-    log.Printf("Starting HTTP server on %d", port)
-
-    mux := http.NewServeMux()
-    mux.HandleFunc("/", Summon)
-    go http.ListenAndServe(":" + strconv.Itoa(port), mux)
 
     chReceiver := make(chan slack.SlackEvent, 100)
     // Seems like the protocol is optional, and the origin can be any URL
@@ -105,41 +96,6 @@ func main() {
             }
         }
     }
-}
-
-func Summon(w http.ResponseWriter, r *http.Request) {
-    token := r.PostFormValue("token")
-    if token != "QMiGNjUdxAWwowx6RxPBDm4s" {
-        log.Printf("Request from something other than the webhook")
-    } else {
-        incomingChannel := r.PostFormValue("channel_name")
-        log.Printf("Summon request into channel: %s", incomingChannel)
-        channelId := getChannelIdFromName(incomingChannel)
-        if isInChannel(channelId) {
-            log.Printf("Already in channel")
-            slackApi.PostMessage(channelId, "Hi!", messageParameters)
-        } else {
-            log.Printf("Not in channel")
-            slackApi.PostMessage(channelId, fmt.Sprintf("Summon me with @%s!", botName), messageParameters)
-        }
-    }
-}
-
-func getChannelIdFromName(channelName string) string {
-    log.Printf("getChannelIdFromName: %s", channelName)
-    allChannels, _ := slackApi.GetChannels(true)
-    for _, channel := range allChannels {
-        if channel.Name == channelName {
-            return channel.Id
-        }
-    }
-    return ""
-}
-
-func isInChannel(channelId string) bool {
-    log.Printf("isInChannel: %s", channelId)
-    info, _ := slackApi.GetChannelInfo(channelId)
-    return info.IsMember
 }
 
 func bugNumberWasLinkedRecently(number string, channelId string, messageTime string) bool {
