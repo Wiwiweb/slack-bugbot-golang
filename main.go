@@ -30,6 +30,7 @@ type MysqlConfig struct {
 var messageParameters = slack.NewPostMessageParameters()
 var historyParameters = slack.NewHistoryParameters()
 var slackApi = slack.New(botKey)
+
 var mysqlConfig = MysqlConfig{}
 
 func main() {
@@ -38,6 +39,7 @@ func main() {
     decoder.Decode(&mysqlConfig)
 
     messageParameters.AsUser = true
+    messageParameters.EscapeText = false
     historyParameters.Count = 10
 
     chReceiver := make(chan slack.SlackEvent, 100)
@@ -55,7 +57,7 @@ func main() {
     for {
         event := <-chReceiver
         message, ok := event.Data.(*slack.MessageEvent)
-        if ok {
+        if ok { // If this is a MessageEvent
             // That event doesn't contain the Username, so we can't use message.Username
             log.Printf("Message from %s in channel %s: %s\n", message.UserId, message.ChannelId, message.Text)
             matches := bugNbRegex.FindAllStringSubmatch(message.Text, -1)
@@ -67,6 +69,7 @@ func main() {
                 }
                 log.Printf("That message mentions these bugs: %s", matchesNb)
                 var messageText string
+
                 for _, match := range matchesNb {
                     if bugNumberWasLinkedRecently(match, message.ChannelId, message.Timestamp) {
                         log.Printf("Bug %s was already linked recently", match)
@@ -76,10 +79,11 @@ func main() {
                             if err != nil && err.Error() == "This bug doesn't exist!" {
                                 messageText += fmt.Sprintf("Bug %s doesn't exist!", match)
                             } else if bugTitle == "" {
-                                messageText += fmt.Sprintf(openProjectBugUrl, match)
+                                messageText += fmt.Sprintf("<%s|%s (Couldn't fetch title)>",
+                                fmt.Sprintf(openProjectBugUrl, match), match)
                             } else {
-                                messageText += fmt.Sprintf("%s: %s - %s",
-                                match, bugTitle, fmt.Sprintf(openProjectBugUrl, match))
+                                messageText += fmt.Sprintf("<%s|%s: %s>",
+                                fmt.Sprintf(openProjectBugUrl, match), match, bugTitle)
                             }
                         } else {
                             messageText += fmt.Sprintf(bugzillaBugUrl, match)
@@ -87,6 +91,7 @@ func main() {
                         messageText += "\n"
                     }
                 }
+
                 if messageText != "" {
                     slackApi.PostMessage(message.ChannelId, messageText, messageParameters)
                 }
@@ -98,6 +103,7 @@ func main() {
 func bugNumberWasLinkedRecently(number string, channelId string, messageTime string) bool {
     historyParameters.Latest = messageTime
     info, _ := slackApi.GetChannelHistory(channelId, historyParameters)
+    // Last 10 messages (see historyParameters.Count)
     for _, message := range info.Messages {
         if strings.Contains(message.Text, number) {
             return true
